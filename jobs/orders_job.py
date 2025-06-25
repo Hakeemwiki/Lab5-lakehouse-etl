@@ -19,8 +19,17 @@ key = job_config.ORDERS_FILE_KEY
 sheet_names = get_excel_sheet_names(bucket, key)
 
 # === Step 2: Read and merge all sheets ===
-orders_df_list = []
+orders_df_list = [] # List to store DataFrames from each sheet
 for sheet in sheet_names:
+    # Read each sheet from the Excel file
     df = read_excel_sheet(spark, f"s3://{bucket}/{key}", sheet_name=sheet)
-    df = df.withColumn("source_sheet", lit(sheet))  # track origin
+    # Add a column to track the source sheet for debugging
+    df = df.withColumn("source_sheet", lit(sheet)) 
     orders_df_list.append(df)
+
+# Merge all sheets into a single DataFrame
+# Handle the case where there might be only one sheet
+orders_df = orders_df_list[0]
+for df in orders_df_list[1:]:
+    orders_df = orders_df.unionByName(df)
+
