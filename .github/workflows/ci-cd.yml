@@ -1,0 +1,10 @@
+# Name of the GitHub Actions workflow
+name: ETL CI/CD Pipeline
+
+# Defines the events that trigger the workflow
+on:
+    push:
+        branches: [main] # Runs on pushes to the main branch
+    pull_request:
+        branches: [main] # Runs on pull requests targeting the main branch
+        
