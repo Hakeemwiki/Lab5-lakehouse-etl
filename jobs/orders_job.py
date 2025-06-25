@@ -62,3 +62,22 @@ from delta.tables import DeltaTable
 
 target_path = f"{job_config.PROCESSED_PATH}/orders"
 rejected_path = f"{job_config.REJECTED_PATH}/orders"
+
+# Check if Delta table exists
+import os
+if not DeltaTable.isDeltaTable(spark, target_path):
+    # Write new table
+    valid_df.write.format("delta").mode("overwrite").partitionBy("date").save(target_path)
+else:
+    delta_table = DeltaTable.forPath(spark, target_path)
+    delta_table.alias("target").merge(
+        valid_df.alias("source"),
+        "target.order_id = source.order_id"
+    ).whenMatchedUpdateAll() \
+     .whenNotMatchedInsertAll() \
+     .execute()
+
+# === Step 7: Write rejected records to S3 ===
+rejected_df.write.format("delta").mode("overwrite").save(rejected_path)
+
+print("Orders job completed successfully.")
