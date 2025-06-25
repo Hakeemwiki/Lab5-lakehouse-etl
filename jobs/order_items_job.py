@@ -58,3 +58,5 @@ required_df = order_items_df.filter(
     col("user_id").isNotNull() &
     col("order_timestamp").isNotNull()
 )
+
+rejected_df = order_items_df.subtract(required_df).withColumn("rejection_reason", lit("Missing fields or bad timestamp"))
