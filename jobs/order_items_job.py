@@ -58,5 +58,19 @@ required_df = order_items_df.filter(
     col("user_id").isNotNull() &
     col("order_timestamp").isNotNull()
 )
-
+# Identify records that fail validation (nulls or invalid timestamps)
 rejected_df = order_items_df.subtract(required_df).withColumn("rejection_reason", lit("Missing fields or bad timestamp"))
+
+# === Step 5: Load reference Delta tables for FK validation ===
+orders_df = spark.read.format("delta").load(f"{job_config.PROCESSED_PATH}/orders").select("order_id").distinct()
+products_df = spark.read.format("delta").load(f"{job_config.PROCESSED_PATH}/products").select("product_id").distinct()
+
+# === Step 6: Enforce referential integrity ===
+valid_fk_df = required_df \
+    .join(orders_df, on="order_id", how="inner") \
+    .join(products_df, on="product_id", how="inner")
+
+invalid_fk_df = required_df.subtract(valid_fk_df).withColumn("rejection_reason", lit("FK constraint failed"))
+
+# === Step 7: Final valid data = passes all checks ===
+final_valid_df = valid_fk_df.dropDuplicates(["id"])
