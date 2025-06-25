@@ -74,3 +74,32 @@ invalid_fk_df = required_df.subtract(valid_fk_df).withColumn("rejection_reason",
 
 # === Step 7: Final valid data = passes all checks ===
 final_valid_df = valid_fk_df.dropDuplicates(["id"])
+
+# === Step 8: Merge/Upsert into Delta table ===
+# Define output paths for processed and rejected data
+target_path = f"{job_config.PROCESSED_PATH}/order_items"
+rejected_path = f"{job_config.REJECTED_PATH}/order_items"
+
+if not DeltaTable.isDeltaTable(spark, target_path):
+    # If no table exists, create a new one with partitioning by date and product_id
+    final_valid_df.write.format("delta") \
+        .mode("overwrite") \
+        .partitionBy("date", "product_id") \
+        .save(target_path)
+else:
+    # Merge new data into existing Delta table for idempotent updates
+    delta_table = DeltaTable.forPath(spark, target_path)
+    delta_table.alias("target").merge(
+        final_valid_df.alias("source"),
+        "target.id = source.id" # Match on primary key
+    ).whenMatchedUpdateAll() \
+     .whenNotMatchedInsertAll() \
+     .execute()
+
+# === Step 9: Write rejected records to S3 ===
+# Combine all rejected records (from null checks and FK failures)
+all_rejected_df = rejected_df.unionByName(invalid_fk_df)
+# Save rejected records to Delta table for auditability
+all_rejected_df.write.format("delta").mode("overwrite").save(rejected_path)
+
+print("Order Items job completed successfully.")
