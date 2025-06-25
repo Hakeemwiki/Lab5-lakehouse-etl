@@ -54,4 +54,11 @@ valid_df = orders_df.filter(
 )
 rejected_df = orders_df.subtract(valid_df).withColumn("rejection_reason", lit("Missing required fields or bad timestamp"))
 
+# === Step 5: Deduplicate records ===
+valid_df = valid_df.dropDuplicates(["order_id"])
 
+# === Step 6: Merge into existing Delta table ===
+from delta.tables import DeltaTable
+
+target_path = f"{job_config.PROCESSED_PATH}/orders"
+rejected_path = f"{job_config.REJECTED_PATH}/orders"
