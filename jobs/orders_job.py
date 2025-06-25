@@ -11,3 +11,16 @@ spark = SparkSession.builder \
     .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
     .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
     .getOrCreate()
+
+# === Step 1: Identify the Excel file and all sheets ===
+bucket = job_config.S3_BUCKET
+key = job_config.ORDERS_FILE_KEY
+
+sheet_names = get_excel_sheet_names(bucket, key)
+
+# === Step 2: Read and merge all sheets ===
+orders_df_list = []
+for sheet in sheet_names:
+    df = read_excel_sheet(spark, f"s3://{bucket}/{key}", sheet_name=sheet)
+    df = df.withColumn("source_sheet", lit(sheet))  # track origin
+    orders_df_list.append(df)
