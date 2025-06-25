@@ -30,3 +30,15 @@ jobs:
         # Step 4: Runs unit tests
         - name: Run tests
           run: pytest tests/  # Executes pytest on the tests directory
+
+    # Job for deploying AWS Step Function
+    deploy-step-function:
+        # This job runs only on pushes to the main branch
+        if: github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest 
+        needs: test # This job depends on the completion of the 'test' job
+        steps:
+            # Step 1: Checks out the repository code
+        - name: Checkout code
+          uses: actions/checkout@v3 # Uses the checkout action version 3
+
