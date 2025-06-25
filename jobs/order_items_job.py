@@ -34,3 +34,27 @@ order_items_df = order_items_dfs[0]
 # Union with remaining sheets, preserving column names
 for df in order_items_dfs[1:]:
     order_items_df = order_items_df.unionByName(df)
+
+
+# === Step 3: Select & cast columns ===
+order_items_df = order_items_df.select(
+    col("id").cast("string"),
+    col("order_id").cast("string"),
+    col("user_id").cast("string"),
+    col("product_id").cast("string"),
+    col("days_since_prior_order").cast("int"),
+    col("add_to_cart_order").cast("int"),
+    col("reordered").cast("boolean"),
+    to_timestamp("order_timestamp").alias("order_timestamp"),
+    to_timestamp("order_timestamp").cast("date").alias("date")
+)
+
+# === Step 4: Validate required fields ===
+# Ensure no nulls in critical fields (id, order_id, product_id, user_id, order_timestamp)
+required_df = order_items_df.filter(
+    col("id").isNotNull() &
+    col("order_id").isNotNull() &
+    col("product_id").isNotNull() &
+    col("user_id").isNotNull() &
+    col("order_timestamp").isNotNull()
+)
