@@ -36,3 +36,30 @@ def read_excel_sheet(spark: SparkSession, s3_path: str, sheet_name: str) -> Data
         .option("inferSchema", "true") \
         .option("dataAddress", f"'{sheet_name}'!") \
         .load(s3_path)
+
+def get_excel_sheet_names(bucket: str, key: str) -> List[str]:
+    """
+    Downloads the Excel file locally and lists all sheet names using openpyxl.
+
+    Args:
+        bucket (str): The S3 bucket name.
+        key (str): The S3 key (path) to the Excel file (e.g., 'path/to/file.xlsx').
+
+    Returns:
+        List[str]: A list of sheet names in the Excel file.
+    """
+    import tempfile
+    import openpyxl
+
+    # Initializes an S3 client using boto3
+    s3 = boto3.client('s3')
+    # Creates a temporary file to store the downloaded Excel file
+    with tempfile.NamedTemporaryFile() as tmp:
+        # Downloads the Excel file from S3 to the temporary file
+        s3.download_fileobj(bucket, key, tmp)
+        # Resets file pointer to the beginning
+        tmp.seek(0)
+        # Loads the Excel workbook in read-only mode using openpyxl
+        wb = openpyxl.load_workbook(tmp.name, read_only=True)
+        # Returns the list of sheet names
+        return wb.sheetnames
