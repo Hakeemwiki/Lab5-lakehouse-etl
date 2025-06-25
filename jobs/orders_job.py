@@ -46,4 +46,12 @@ orders_df = orders_df.select(
     to_timestamp("order_timestamp").cast("date").alias("date")
 )
 
+# === Step 4: Validate records ===
+valid_df = orders_df.filter(
+    col("order_id").isNotNull() &
+    col("user_id").isNotNull() &
+    col("order_timestamp").isNotNull()
+)
+rejected_df = orders_df.subtract(valid_df).withColumn("rejection_reason", lit("Missing required fields or bad timestamp"))
+
 
