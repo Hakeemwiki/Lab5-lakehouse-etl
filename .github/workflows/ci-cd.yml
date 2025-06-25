@@ -16,3 +16,17 @@ jobs:
         # Step 1: Checks out the repository code
         - name: Checkout code
           uses: actions/checkout@v3 # Uses the checkout action version 3
+
+        # Step 2: Sets up Python environment
+        - name: Set up Python
+          uses: actions/setup-python@v4 # Uses the setup-python action version 4
+          with:
+            python-version: '3.11' # Specifies the Python version to use
+
+        # Step 3: Installs dependencies
+        - name: Install dependencies
+          run: pip install -r requirements.txt # Installs dependencies from requirements.txt
+
+        # Step 4: Runs unit tests
+        - name: Run tests
+          run: pytest tests/  # Executes pytest on the tests directory
