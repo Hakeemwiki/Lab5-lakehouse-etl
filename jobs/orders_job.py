@@ -33,3 +33,17 @@ orders_df = orders_df_list[0]
 for df in orders_df_list[1:]:
     orders_df = orders_df.unionByName(df)
 
+
+# === Step 3: Apply transformations and validation ===
+
+# Select relevant columns with casting
+orders_df = orders_df.select(
+    col("order_num").cast("string"),
+    col("order_id").cast("string"),
+    col("user_id").cast("string"),
+    to_timestamp("order_timestamp").alias("order_timestamp"),
+    col("total_amount").cast("double"),
+    to_timestamp("order_timestamp").cast("date").alias("date")
+)
+
+
