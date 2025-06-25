@@ -51,6 +51,6 @@ jobs:
             # Environment variables for AWS authentication and configuration
             AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS access key from GitHub secrets
             AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}  # AWS secret key from GitHub secrets
-            AWS_REGION: us-east-1  # Specifies AWS region for deployment
+            AWS_REGION: eu-north-1  # Specifies AWS region for deployment
 
 
