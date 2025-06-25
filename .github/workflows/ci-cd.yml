@@ -7,4 +7,12 @@ on:
         branches: [main] # Runs on pushes to the main branch
     pull_request:
         branches: [main] # Runs on pull requests targeting the main branch
-        
+   
+# Defines the jobs to be executed
+jobs:
+    test:
+        runs-on: ubuntu-latest # Specifies the runner environment (latest Ubuntu)
+        steps:
+        # Step 1: Checks out the repository code
+        - name: Checkout code
+          uses: actions/checkout@v3 # Uses the checkout action version 3
