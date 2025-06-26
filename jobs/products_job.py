@@ -1,8 +1,12 @@
 # import necessary libraries
 from pyspark.sql import SparkSession
+import sys
+import os
+# Add the parent folder (lakehouse-etl/) to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.utils import read_csv_from_s3
 from config import job_config
-import sys
+
 
 # Initialize SparkSession
 spark = SparkSession.builder \
