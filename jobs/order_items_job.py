@@ -1,8 +1,13 @@
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import col, to_timestamp, lit
+import sys
+import os
+# Add the parent folder (lakehouse-etl/) to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.utils import read_excel_sheet, get_excel_sheet_names
 from config import job_config
 from delta.tables import DeltaTable
+
 
 # === Step 1: Initialize Spark ===
 spark = SparkSession.builder \
