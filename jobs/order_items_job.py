@@ -19,7 +19,7 @@ spark = glueContext.spark_session
 
 
 try:
-    print("🚀 Starting Order Items ETL Job")
+    print("Starting Order Items ETL Job")
 
     # === Step 2: Load Excel sheets from S3 ===
     # Retrieve S3 bucket and key for order_items_apr_2025.xlsx from centralized config
