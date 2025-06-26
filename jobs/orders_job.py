@@ -1,6 +1,10 @@
 # import necessary libraries
 from pyspark.sql import SparkSession, dataframe
 from pyspark.sql.functions import col, to_timestamp, lit
+import sys
+import os
+# Add the parent folder (lakehouse-etl/) to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from common.utils import read_excel_sheet, get_excel_sheet_names
 from config import job_config
 import boto3
