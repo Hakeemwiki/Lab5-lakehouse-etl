@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 AWS Glue ETL Job: products_job.py
 ----------------------------------------------------
