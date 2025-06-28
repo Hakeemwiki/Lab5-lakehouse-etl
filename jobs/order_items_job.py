@@ -1,119 +1,149 @@
-from awsglue.context import GlueContext
-from awsglue.utils import getResolvedOptions
-from pyspark.context import SparkContext
-from pyspark.sql.functions import col, to_timestamp, lit
-from delta.tables import DeltaTable
+#!/usr/bin/env python3
+"""
+order_items_job.py - AWS Glue ETL script for processing order items data in Lakehouse architecture.
+
+This job:
+- Reads preprocessed order items CSV files from S3.
+- Validates schema and enforces data quality rules.
+- Joins with Orders Delta table to enforce referential integrity.
+- Deduplicates and merges data into Delta Lake.
+- Logs rejected records and runtime details.
+
+Expected columns:
+id, order_id, user_id, days_since_prior_order, product_id, add_to_cart_order,
+reordered, order_timestamp, date, sheet_name, source_file
+"""
+
 import sys
 import os
+import datetime
+from pyspark.sql import SparkSession
+from awsglue.context import GlueContext
+from delta.tables import DeltaTable
+from pyspark.sql.functions import col, lit, current_timestamp, to_timestamp
 
-# Add the parent folder (lakehouse-etl/) to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from common.utils import read_excel_sheet, get_excel_sheet_names
-from config import job_config
+# -----------------------------------
+# 🔧 SparkSession with Delta support
+# -----------------------------------
+spark = (
+    SparkSession.builder
+    .appName("order_items_job")
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+    .getOrCreate()
+)
+glueContext = GlueContext(spark.sparkContext)
+spark.sparkContext.setLogLevel("WARN")
 
+# -----------------------------------
+# Job Configuration
+# -----------------------------------
+DATE = datetime.date.today().strftime("%Y-%m-%d")
+S3_BUCKET = "ecommerce-lakehouse-001"
+RAW_PATH = f"s3://{S3_BUCKET}/preprocessed/order_items/"
+WAREHOUSE_PATH = f"s3://{S3_BUCKET}/warehouse/lakehouse-dwh/order_items/"
+REJECT_PATH = f"s3://{S3_BUCKET}/rejected/order_items/{datetime.date.today()}/"
+LOG_PATH = f"s3://ecommerce-lakehouse-001/logs/products_job/{DATE}/glue_log_{datetime}.txt"
+ORDERS_TABLE_PATH = f"s3://{S3_BUCKET}/warehouse/lakehouse-dwh/orders/"
 
-# === Step 1: Initialize Spark ===
-sc = SparkContext()
-glueContext = GlueContext(sc)
-spark = glueContext.spark_session
+# -----------------------------------
+# Load raw CSV data from S3
+# -----------------------------------
+df = spark.read.option("header", True).csv(RAW_PATH)
 
+# -----------------------------------
+# 🧪 Enforce expected schema
+# -----------------------------------
+expected_columns = [
+    "id", "order_id", "user_id", "days_since_prior_order", "product_id",
+    "add_to_cart_order", "reordered", "order_timestamp", "date",
+    "sheet_name", "source_file"
+]
 
-try:
-    print("Starting Order Items ETL Job")
+# Keep only expected columns (if present)
+df = df.select([col(c) for c in expected_columns if c in df.columns])
 
-    # === Step 2: Load Excel sheets from S3 ===
-    # Retrieve S3 bucket and key for order_items_apr_2025.xlsx from centralized config
-    bucket = job_config.S3_BUCKET
-    key = job_config.ORDER_ITEMS_FILE_KEY
+# Explicitly cast columns to expected types
+df = df.withColumn("id", col("id").cast("long")) \
+       .withColumn("order_id", col("order_id").cast("long")) \
+       .withColumn("user_id", col("user_id").cast("long")) \
+       .withColumn("days_since_prior_order", col("days_since_prior_order").cast("int")) \
+       .withColumn("product_id", col("product_id").cast("long")) \
+       .withColumn("add_to_cart_order", col("add_to_cart_order").cast("int")) \
+       .withColumn("reordered", col("reordered").cast("int")) \
+       .withColumn("order_timestamp", to_timestamp("order_timestamp")) \
+       .withColumn("date", col("date").cast("date")) \
+       .withColumn("sheet_name", col("sheet_name").cast("string")) \
+       .withColumn("source_file", col("source_file").cast("string"))
 
-    # Dynamically get all sheet names from the Excel file (each sheet represents a day in April 2025)
-    sheet_names = get_excel_sheet_names(bucket, key)
+# -----------------------------------
+# Validate required fields
+# Drop rows missing essential fields
+# -----------------------------------
+valid_df = df.filter(
+    col("id").isNotNull() &
+    col("order_id").isNotNull() &
+    col("user_id").isNotNull() &
+    col("product_id").isNotNull() &
+    col("order_timestamp").isNotNull()
+)
 
-    # Initialize a list to store DataFrames from each sheet
-    order_items_dfs = []
-    for sheet in sheet_names:
-        # Read each sheet using the reusable utility function from common.utils
-        df = read_excel_sheet(spark, f"s3://{bucket}/{key}", sheet_name=sheet)
-        # Add a column to track the source sheet for debugging and auditability
-        df = df.withColumn("source_sheet", lit(sheet))
-        order_items_dfs.append(df)
+# Identify rejected records
+rejected_df = df.subtract(valid_df)
+rejected_count = rejected_df.count()
+if rejected_count > 0:
+    rejected_df.write.mode("overwrite").csv(REJECT_PATH)
+    print(f"⚠️ Rejected {rejected_count} rows written to: {REJECT_PATH}")
+else:
+    print("No rejected records found.")
 
-    # Merge all sheets into a single DataFrame
-    # Start with the first sheet's DataFrame
-    order_items_df = order_items_dfs[0]
-    # Union with remaining sheets, preserving column names
-    for df in order_items_dfs[1:]:
-        order_items_df = order_items_df.unionByName(df)
+# -----------------------------------
+# Enforce referential integrity
+# Keep only order_items linked to known order_id from Orders Delta
+# -----------------------------------
+orders_df = spark.read.format("delta").load(ORDERS_TABLE_PATH).select("order_id").dropDuplicates()
+valid_df = valid_df.join(orders_df, on="order_id", how="inner")
 
+# -----------------------------------
+# Deduplication + Add ingestion timestamp
+# Drop duplicates on composite key
+# -----------------------------------
+deduped_df = valid_df.dropDuplicates([
+    "id", "order_id", "user_id", "product_id", "order_timestamp"
+]).withColumn("ingested_at", current_timestamp())
 
-    # === Step 3: Select & cast columns ===
-    order_items_df = order_items_df.select(
-        col("id").cast("string"),
-        col("order_id").cast("string"),
-        col("user_id").cast("string"),
-        col("product_id").cast("string"),
-        col("days_since_prior_order").cast("int"),
-        col("add_to_cart_order").cast("int"),
-        col("reordered").cast("boolean"),
-        to_timestamp("order_timestamp").alias("order_timestamp"),
-        to_timestamp("order_timestamp").cast("date").alias("date")
-    )
+# -----------------------------------
+# Delta Lake Write (Merge or Overwrite)
+# 1. Delta check before writing
+# 2. Merge/upsert if exists
+# 3. Partition by `date`
+# -----------------------------------
+write_count = deduped_df.count()
+if DeltaTable.isDeltaTable(spark, WAREHOUSE_PATH):
+    delta_table = DeltaTable.forPath(spark, WAREHOUSE_PATH)
+    delta_table.alias("target").merge(
+        deduped_df.alias("source"),
+        "target.id = source.id"
+    ).whenMatchedUpdateAll() \
+     .whenNotMatchedInsertAll() \
+     .execute()
+    print(f"{write_count} rows merged into existing Delta table.")
+else:
+    deduped_df.write.format("delta").partitionBy("date").mode("overwrite").save(WAREHOUSE_PATH)
+    print(f"{write_count} rows written to new Delta table with partitioning by 'date'.")
 
-    # === Step 4: Validate required fields ===
-    # Ensure no nulls in critical fields (id, order_id, product_id, user_id, order_timestamp)
-    required_df = order_items_df.filter(
-        col("id").isNotNull() &
-        col("order_id").isNotNull() &
-        col("product_id").isNotNull() &
-        col("user_id").isNotNull() &
-        col("order_timestamp").isNotNull()
-    )
-    # Identify records that fail validation (nulls or invalid timestamps)
-    rejected_df = order_items_df.subtract(required_df).withColumn("rejection_reason", lit("Missing fields or bad timestamp"))
-
-    # === Step 5: Load reference Delta tables for FK validation ===
-    orders_df = spark.read.format("delta").load(f"{job_config.PROCESSED_PATH}/orders").select("order_id").distinct()
-    products_df = spark.read.format("delta").load(f"{job_config.PROCESSED_PATH}/products").select("product_id").distinct()
-
-    # === Step 6: Enforce referential integrity ===
-    valid_fk_df = required_df \
-        .join(orders_df, on="order_id", how="inner") \
-        .join(products_df, on="product_id", how="inner")
-
-    invalid_fk_df = required_df.subtract(valid_fk_df).withColumn("rejection_reason", lit("FK constraint failed"))
-
-    # === Step 7: Final valid data = passes all checks ===
-    final_valid_df = valid_fk_df.dropDuplicates(["id"])
-
-    # === Step 8: Merge/Upsert into Delta table ===
-    # Define output paths for processed and rejected data
-    target_path = f"{job_config.PROCESSED_PATH}/order_items"
-    rejected_path = f"{job_config.REJECTED_PATH}/order_items"
-
-    if not DeltaTable.isDeltaTable(spark, target_path):
-        # If no table exists, create a new one with partitioning by date and product_id
-        final_valid_df.write.format("delta") \
-            .mode("overwrite") \
-            .partitionBy("date", "product_id") \
-            .save(target_path)
-    else:
-        # Merge new data into existing Delta table for idempotent updates
-        delta_table = DeltaTable.forPath(spark, target_path)
-        delta_table.alias("target").merge(
-            final_valid_df.alias("source"),
-            "target.id = source.id" # Match on primary key
-        ).whenMatchedUpdateAll() \
-         .whenNotMatchedInsertAll() \
-         .execute()
-
-    # === Step 9: Write rejected records to S3 ===
-    # Combine all rejected records (from null checks and FK failures)
-    all_rejected_df = rejected_df.unionByName(invalid_fk_df)
-    # Save rejected records to Delta table for auditability
-    all_rejected_df.write.format("delta").mode("overwrite").save(rejected_path)
-
-    print("Order Items ETL job completed successfully.")
-
-except Exception as e:
-    print(f"Job failed: {e}")
-    raise
+# -----------------------------------
+# Write ETL log to S3
+# -----------------------------------
+log_data = f"""
+ETL Job Completed: order_items_job.py
+Input Rows:      {df.count()}
+Valid Rows:      {valid_df.count()}
+Deduplicated:    {write_count}
+Rejected Rows:   {rejected_count}
+Output Location: {WAREHOUSE_PATH}
+Run Timestamp:   {datetime.datetime.now().isoformat()}
+"""
+# Save log to S3
+spark.sparkContext.parallelize([log_data]).coalesce(1).saveAsTextFile(LOG_PATH)
+print("Log written to:", LOG_PATH)
