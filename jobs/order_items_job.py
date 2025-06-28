@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 order_items_job.py - AWS Glue ETL script for processing order items data in Lakehouse architecture.
 
@@ -8,6 +7,7 @@ This job:
 - Joins with Orders Delta table to enforce referential integrity.
 - Deduplicates and merges data into Delta Lake.
 - Logs rejected records and runtime details.
+- Archives original Excel files after successful ingestion.
 
 Expected columns:
 id, order_id, user_id, days_since_prior_order, product_id, add_to_cart_order,
@@ -21,6 +21,20 @@ from pyspark.sql import SparkSession
 from awsglue.context import GlueContext
 from delta.tables import DeltaTable
 from pyspark.sql.functions import col, lit, current_timestamp, to_timestamp
+import boto3
+import logging
+
+# -----------------------------------
+# 🔧 Logging Setup
+# -----------------------------------
+logger = logging.getLogger('glue_logger')
+logger.setLevel(logging.INFO)
+log_stream = []
+
+def log(msg):
+    """Log messages to in-memory stream for later upload to S3."""
+    log_stream.append(f"{datetime.datetime.now().isoformat()} - {msg}")
+    logger.info(msg)
 
 # -----------------------------------
 # 🔧 SparkSession with Delta support
@@ -36,20 +50,51 @@ glueContext = GlueContext(spark.sparkContext)
 spark.sparkContext.setLogLevel("WARN")
 
 # -----------------------------------
-# Job Configuration
+# 📂 Job Configuration
 # -----------------------------------
 DATE = datetime.date.today().strftime("%Y-%m-%d")
 S3_BUCKET = "ecommerce-lakehouse-001"
 RAW_PATH = f"s3://{S3_BUCKET}/preprocessed/order_items/"
 WAREHOUSE_PATH = f"s3://{S3_BUCKET}/warehouse/lakehouse-dwh/order_items/"
 REJECT_PATH = f"s3://{S3_BUCKET}/rejected/order_items/{datetime.date.today()}/"
-LOG_PATH = f"s3://ecommerce-lakehouse-001/logs/products_job/{DATE}/glue_log_{datetime}.txt"
+LOG_PATH = f"s3://ecommerce-lakehouse-001/logs/order_items_job/{DATE}/glue_log_{datetime.datetime.now().strftime('%H%M%S')}.txt"  # Unique log file per run
 ORDERS_TABLE_PATH = f"s3://{S3_BUCKET}/warehouse/lakehouse-dwh/orders/"
+ARCHIVE_PREFIX = f"s3://{S3_BUCKET}/archive/order_items/"  # New archive location
+
+# Initialize S3 client for archiving
+s3_client = boto3.client("s3")
+
+def archive_original_files():
+    """
+    Archives original Excel files from raw/order_items/ to archive/order_items/ after successful ingestion.
+    
+    Note: Moves files with a timestamp suffix to preserve history.
+    """
+    raw_prefix = "raw/order_items/"
+    try:
+        # List objects in raw/order_items/
+        response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=raw_prefix)
+        if 'Contents' not in response:
+            log("No files found in raw/order_items/ to archive.")
+            return
+
+        for obj in response['Contents']:
+            s3_key = obj['Key']
+            if s3_key.endswith('.xlsx'):  # Only archive Excel files
+                # Create archive key with timestamp
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                archive_key = f"archive/order_items/{os.path.basename(s3_key).replace('.xlsx', f'_{timestamp}.xlsx')}"
+                s3_client.copy_object(Bucket=S3_BUCKET, CopySource={'Bucket': S3_BUCKET, 'Key': s3_key}, Key=archive_key)
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+                log(f"Archived {s3_key} to {archive_key}")
+    except Exception as e:
+        log(f"Failed to archive files: {e}")
 
 # -----------------------------------
-# Load raw CSV data from S3
+# 🧾 Load raw CSV data from S3
 # -----------------------------------
 df = spark.read.option("header", True).csv(RAW_PATH)
+log(f"Loaded raw CSV data from {RAW_PATH}")
 
 # -----------------------------------
 # 🧪 Enforce expected schema
@@ -62,6 +107,7 @@ expected_columns = [
 
 # Keep only expected columns (if present)
 df = df.select([col(c) for c in expected_columns if c in df.columns])
+log(f"Selected columns: {expected_columns}")
 
 # Explicitly cast columns to expected types
 df = df.withColumn("id", col("id").cast("long")) \
@@ -75,9 +121,10 @@ df = df.withColumn("id", col("id").cast("long")) \
        .withColumn("date", col("date").cast("date")) \
        .withColumn("sheet_name", col("sheet_name").cast("string")) \
        .withColumn("source_file", col("source_file").cast("string"))
+log("Applied column type casting")
 
 # -----------------------------------
-# Validate required fields
+# ✅ Validate required fields
 # Drop rows missing essential fields
 # -----------------------------------
 valid_df = df.filter(
@@ -87,33 +134,37 @@ valid_df = df.filter(
     col("product_id").isNotNull() &
     col("order_timestamp").isNotNull()
 )
+log(f"Validated required fields, kept {valid_df.count()} valid rows")
 
 # Identify rejected records
 rejected_df = df.subtract(valid_df)
 rejected_count = rejected_df.count()
 if rejected_count > 0:
     rejected_df.write.mode("overwrite").csv(REJECT_PATH)
-    print(f"⚠️ Rejected {rejected_count} rows written to: {REJECT_PATH}")
+    log(f"Rejected {rejected_count} rows written to: {REJECT_PATH}")
 else:
-    print("No rejected records found.")
+    log("No rejected records found.")
 
 # -----------------------------------
-# Enforce referential integrity
+# 🔗 Enforce referential integrity
 # Keep only order_items linked to known order_id from Orders Delta
 # -----------------------------------
 orders_df = spark.read.format("delta").load(ORDERS_TABLE_PATH).select("order_id").dropDuplicates()
 valid_df = valid_df.join(orders_df, on="order_id", how="inner")
+log(f"Enforced referential integrity, joined with Orders table")
 
 # -----------------------------------
-# Deduplication + Add ingestion timestamp
+# 🔁 Deduplication + Add ingestion timestamp
 # Drop duplicates on composite key
 # -----------------------------------
 deduped_df = valid_df.dropDuplicates([
     "id", "order_id", "user_id", "product_id", "order_timestamp"
 ]).withColumn("ingested_at", current_timestamp())
+log(f"Deduplicated data, final row count: {deduped_df.count()}")
 
 # -----------------------------------
-# Delta Lake Write (Merge or Overwrite)
+# 💾 Delta Lake Write (Merge or Overwrite)
+# Enhancements:
 # 1. Delta check before writing
 # 2. Merge/upsert if exists
 # 3. Partition by `date`
@@ -127,14 +178,21 @@ if DeltaTable.isDeltaTable(spark, WAREHOUSE_PATH):
     ).whenMatchedUpdateAll() \
      .whenNotMatchedInsertAll() \
      .execute()
-    print(f"{write_count} rows merged into existing Delta table.")
+    log(f"{write_count} rows merged into existing Delta table.")
 else:
     deduped_df.write.format("delta").partitionBy("date").mode("overwrite").save(WAREHOUSE_PATH)
-    print(f"{write_count} rows written to new Delta table with partitioning by 'date'.")
+    log(f"{write_count} rows written to new Delta table with partitioning by 'date'.")
 
 # -----------------------------------
-# Write ETL log to S3
+# 🗃️ Archive original files after successful ingestion
 # -----------------------------------
+archive_original_files()
+log("Original Excel files archived.")
+
+# -----------------------------------
+# 📄 Write ETL log to S3
+# -----------------------------------
+current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Current time: 2025-06-28 22:15:00 GMT
 log_data = f"""
 ETL Job Completed: order_items_job.py
 Input Rows:      {df.count()}
@@ -142,8 +200,24 @@ Valid Rows:      {valid_df.count()}
 Deduplicated:    {write_count}
 Rejected Rows:   {rejected_count}
 Output Location: {WAREHOUSE_PATH}
-Run Timestamp:   {datetime.datetime.now().isoformat()}
+Run Timestamp:   {current_time}
+Archived Files:  Archived original Excel files from raw/order_items/ to archive/order_items/
 """
 # Save log to S3
 spark.sparkContext.parallelize([log_data]).coalesce(1).saveAsTextFile(LOG_PATH)
-print("Log written to:", LOG_PATH)
+log(f"Log written to: {LOG_PATH}")
+
+def upload_logs_to_s3():
+    """Upload log stream to S3 after job completion."""
+    s3 = boto3.client('s3')
+    bucket = LOG_PATH.split('/')[2]
+    key = '/'.join(LOG_PATH.split('/')[3:])
+    s3.put_object(
+        Body="\n".join(log_stream),
+        Bucket=bucket,
+        Key=key
+    )
+    log("Logs uploaded to S3 successfully.")
+
+# Execute log upload on job completion
+upload_logs_to_s3()
