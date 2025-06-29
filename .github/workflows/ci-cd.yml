@@ -45,7 +45,7 @@ jobs:
         - name: Deploy State Machine
           run: |
             aws stepfunctions update-state-machine \
-              --state-machine-arn arn:aws:states:eu-north-1:396468676537:stateMachine:LakehouseOrchestrator \
+              --state-machine-arn arn:aws:states:eu-north-1:396468676537:stateMachine:Lakehouse-step-function \
               --definition file://step_functions/state_machine.json
           env:
             # Environment variables for AWS authentication and configuration
