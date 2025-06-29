@@ -1,0 +1,170 @@
+{
+    "Comment": "Lakehouse ETL Pipeline Orchestration",
+    "StartAt": "RunXlsxToCsv",
+    "States": {
+      "RunXlsxToCsv": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::glue:startJobRun.sync",
+        "Parameters": {
+          "JobName": "xlsx_to_csv"
+        },
+        "Next": "ParallelProcessing",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "ParallelProcessing": {
+        "Type": "Parallel",
+        "Branches": [
+          {
+            "StartAt": "RunProductsJob",
+            "States": {
+              "RunProductsJob": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::glue:startJobRun.sync",
+                "Parameters": {
+                  "JobName": "products_glue_job"
+                },
+                "End": true
+              }
+            }
+          },
+          {
+            "StartAt": "RunOrdersJob",
+            "States": {
+              "RunOrdersJob": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::glue:startJobRun.sync",
+                "Parameters": {
+                  "JobName": "order_glue_job"
+                },
+                "End": true
+              }
+            }
+          },
+          {
+            "StartAt": "RunOrderItemsJob",
+            "States": {
+              "RunOrderItemsJob": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::glue:startJobRun.sync",
+                "Parameters": {
+                  "JobName": "order_items_glue_job"
+                },
+                "End": true
+              }
+            }
+          }
+        ],
+        "Next": "RunCrawlers",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "RunCrawlers": {
+        "Type": "Parallel",
+        "Branches": [
+          {
+            "StartAt": "RunProductsCrawler",
+            "States": {
+              "RunProductsCrawler": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+                "Parameters": {
+                  "Name": "products_crawler"
+                },
+                "End": true
+              }
+            }
+          },
+          {
+            "StartAt": "RunOrdersCrawler",
+            "States": {
+              "RunOrdersCrawler": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+                "Parameters": {
+                  "Name": "order_crawler"
+                },
+                "End": true
+              }
+            }
+          },
+          {
+            "StartAt": "RunOrderItemsCrawler",
+            "States": {
+              "RunOrderItemsCrawler": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+                "Parameters": {
+                  "Name": "order_items_crawler"
+                },
+                "End": true
+              }
+            }
+          }
+        ],
+        "Next": "AthenaQueryPreview",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "AthenaQueryPreview": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::aws-sdk:athena:startQueryExecution",
+        "Parameters": {
+          "QueryString": "SELECT * FROM \"lakehouse_dwh\".\"order_items\" LIMIT 10;",
+          "QueryExecutionContext": {
+            "Database": "lakehouse-dwh"
+          },
+          "ResultConfiguration": {
+            "OutputLocation": "s3://ecommerce-lakehouse-001/athena-queries/"
+          }
+        },
+        "Next": "NotifySuccess",
+        "Catch": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "Next": "NotifyFailure"
+          }
+        ]
+      },
+      "NotifySuccess": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
+          "Message": "Lakehouse pipeline execution completed successfully.",
+          "Subject": "Lakehouse Pipeline Success"
+        },
+        "End": true
+      },
+      "NotifyFailure": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::sns:publish",
+        "Parameters": {
+          "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
+          "Message": "Lakehouse pipeline failed. Check Step Function logs for details.",
+          "Subject": "Lakehouse Pipeline Failed"
+        },
+        "End": true
+      }
+    }
+  }
