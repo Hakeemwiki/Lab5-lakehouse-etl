@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, StringType
-from jobs.order_items_job import archive_original_files
+from order_items_job import archive_original_files
 
 # Fixture to set up and tear down a SparkSession for all tests in this file
 @pytest.fixture(scope="module")
