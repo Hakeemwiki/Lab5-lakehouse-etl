@@ -26,6 +26,10 @@ jobs:
         # Step 3: Installs dependencies
         - name: Install dependencies
           run: pip install -r requirements.txt # Installs dependencies from requirements.txt
+        
+        # Step 3.5: Add jobs folder to PYTHONPATH
+        - name: Set PYTHONPATH
+          run: echo "PYTHONPATH=$PYTHONPATH:$(pwd)/jobs" >> $GITHUB_ENV
 
         # Step 4: Runs unit tests
         - name: Run tests
