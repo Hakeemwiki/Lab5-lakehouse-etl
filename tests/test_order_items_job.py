@@ -2,6 +2,9 @@ import pytest
 from unittest.mock import patch
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, StringType
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'jobs')))
 from order_items_job import archive_original_files
 
 # Fixture to set up and tear down a SparkSession for all tests in this file
