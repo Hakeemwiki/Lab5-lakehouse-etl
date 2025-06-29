@@ -5,8 +5,7 @@ from datetime import datetime
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, LongType, StringType
 
-# Initialize S3 client and bucket name
-s3_client = boto3.client('s3')
+# Define bucket name as a constant
 BUCKET_NAME = "ecommerce-lakehouse-001"
 
 def archive_original_files(prefix, archive_prefix):
@@ -16,6 +15,8 @@ def archive_original_files(prefix, archive_prefix):
         prefix (str): S3 source prefix (e.g., 'raw/order_items/')
         archive_prefix (str): S3 destination prefix (e.g., 'archive/order_items/')
     """
+    # Initialize S3 client inside the function to allow mocking
+    s3_client = boto3.client('s3')
     try:
         # List objects in the source prefix
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)
@@ -70,6 +71,8 @@ def download_xlsx_from_s3(source_key, local_path):
         source_key (str): S3 key of the Excel file (e.g., 'raw/orders/orders.xlsx')
         local_path (str): Local path to save the file (e.g., '/tmp/orders.xlsx')
     """
+    # Initialize S3 client inside the function
+    s3_client = boto3.client('s3')
     try:
         s3_client.download_file(BUCKET_NAME, source_key, local_path)
         print(f"Downloaded {source_key} to {local_path}")
@@ -80,6 +83,8 @@ def copy_products_file():
     """
     Copies products.csv from raw to preprocessed S3 location.
     """
+    # Initialize S3 client inside the function
+    s3_client = boto3.client('s3')
     try:
         source_key = "raw/products/products.csv"
         destination_key = "preprocessed/products/products.csv"
