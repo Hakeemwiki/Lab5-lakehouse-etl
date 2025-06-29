@@ -45,8 +45,8 @@ jobs:
         - name: Deploy State Machine
           run: |
             aws stepfunctions update-state-machine \
-             --state-machine-arn arn:aws:states:us-east-1:<ACCOUNT_ID>:stateMachine:LakehouseOrchestrator \
-             --definition file://step_functions/state_machine.json
+              --state-machine-arn arn:aws:states:eu-north-1:396468676537:stateMachine:LakehouseOrchestrator \
+              --definition file://step_functions/state_machine.json
           env:
             # Environment variables for AWS authentication and configuration
             AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  # AWS access key from GitHub secrets
