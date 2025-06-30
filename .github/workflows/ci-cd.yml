@@ -79,7 +79,7 @@ jobs:
 
             # Update xlsx_to_csv
             aws glue update-job --job-name xlsx_to_csv \
-              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=pythonshell,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py},GlueVersion=4.0,PythonVersion=3.9"
+              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=pythonshell,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py,PythonVersion=3.9},GlueVersion=4.0"
 
         # Step 5: Deploy or update AWS Step Function state machine
         - name: Deploy State Machine
