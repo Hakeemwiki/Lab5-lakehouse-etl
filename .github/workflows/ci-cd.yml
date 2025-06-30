@@ -67,15 +67,15 @@ jobs:
           run: |
             # Update products_glue_job
             aws glue update-job --job-name products_glue_job \
-              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py},GlueVersion=4.0,WorkerType=G.1X,NumberOfWorkers=2"
+              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py},GlueVersion=5.0,WorkerType=G.1X,NumberOfWorkers=2"
 
             # Update order_glue_job
             aws glue update-job --job-name order_glue_job \
-              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py},GlueVersion=4.0,WorkerType=G.1X,NumberOfWorkers=2"
+              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py},GlueVersion=5.0,WorkerType=G.1X,NumberOfWorkers=2"
 
             # Update order_items_glue_job
             aws glue update-job --job-name order_items_glue_job \
-              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py},GlueVersion=4.0,WorkerType=G.1X,NumberOfWorkers=2"
+              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py},GlueVersion=5.0,WorkerType=G.1X,NumberOfWorkers=2"
 
             # Update xlsx_to_csv
             aws glue update-job --job-name xlsx_to_csv \
