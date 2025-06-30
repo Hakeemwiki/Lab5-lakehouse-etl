@@ -57,10 +57,10 @@ jobs:
         # Step 3: Upload Glue job scripts to S3
         - name: Upload Glue job scripts to S3
           run: |
-            aws s3 cp products_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py
-            aws s3 cp order_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py
-            aws s3 cp order_items_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py
-            aws s3 cp xlsx_to_csv.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py
+            aws s3 cp jobs/products_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py
+            aws s3 cp jobs/order_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py
+            aws s3 cp jobs/order_items_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py
+            aws s3 cp jobs/xlsx_to_csv.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py
             aws s3 cp utils.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py
 
         # Step 4: Create or update Glue jobs
