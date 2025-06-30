@@ -52,7 +52,7 @@ def convert_excel_sheets_to_csv(local_xlsx_path, output_prefix):
 
         s3_key = f"{output_prefix}{csv_filename}"  # S3 key for the uploaded CSV.
         s3.upload_file(local_csv_path, S3_BUCKET, s3_key)  # Uploads the CSV to S3.
-        print(f"📤 Uploaded {csv_filename} to s3://{S3_BUCKET}/{s3_key}")
+        print(f"Uploaded {csv_filename} to s3://{S3_BUCKET}/{s3_key}")
 
 def copy_products_file():
     """Copy products.csv from raw to preprocessed without modification."""
@@ -65,9 +65,9 @@ def copy_products_file():
             CopySource={'Bucket': S3_BUCKET, 'Key': source_key},
             Key=destination_key
         )
-        print(f"✅ Copied products.csv to s3://{S3_BUCKET}/{destination_key}")
+        print(f"Copied products.csv to s3://{S3_BUCKET}/{destination_key}")
     except Exception as e:
-        print(f"❌ Failed to copy products.csv: {e}")  # Logs any errors during copy.
+        print(f"Failed to copy products.csv: {e}")  # Logs any errors during copy.
 
 def main():
     # Define Excel files to process
@@ -82,7 +82,7 @@ def main():
             download_xlsx_from_s3(s3_key, local_path)  # Downloads the Excel file.
             convert_excel_sheets_to_csv(local_path, f"{OUTPUT_PREFIX}{name}/")  # Converts and uploads sheets as CSV.
         except Exception as e:
-            print(f"❌ Failed to process {name}: {e}")  # Logs errors for individual file processing.
+            print(f"Failed to process {name}: {e}")  # Logs errors for individual file processing.
 
     copy_products_file()  # Copies products.csv without modification.
 

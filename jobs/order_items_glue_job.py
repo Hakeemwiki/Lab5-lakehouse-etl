@@ -25,7 +25,7 @@ import boto3
 import logging
 
 # -----------------------------------
-# 🔧 Logging Setup
+# Logging Setup
 # -----------------------------------
 logger = logging.getLogger('glue_logger')
 logger.setLevel(logging.INFO)
@@ -37,7 +37,7 @@ def log(msg):
     logger.info(msg)
 
 # -----------------------------------
-# 🔧 SparkSession with Delta support
+# SparkSession with Delta support
 # -----------------------------------
 spark = (
     SparkSession.builder
@@ -50,7 +50,7 @@ glueContext = GlueContext(spark.sparkContext)
 spark.sparkContext.setLogLevel("WARN")
 
 # -----------------------------------
-# 📂 Job Configuration
+# Job Configuration
 # -----------------------------------
 DATE = datetime.date.today().strftime("%Y-%m-%d")
 S3_BUCKET = "ecommerce-lakehouse-001"
@@ -91,13 +91,13 @@ def archive_original_files():
         log(f"Failed to archive files: {e}")
 
 # -----------------------------------
-# 🧾 Load raw CSV data from S3
+# Load raw CSV data from S3
 # -----------------------------------
 df = spark.read.option("header", True).csv(RAW_PATH)
 log(f"Loaded raw CSV data from {RAW_PATH}")
 
 # -----------------------------------
-# 🧪 Enforce expected schema
+# Enforce expected schema
 # -----------------------------------
 expected_columns = [
     "id", "order_id", "user_id", "days_since_prior_order", "product_id",
@@ -124,7 +124,7 @@ df = df.withColumn("id", col("id").cast("long")) \
 log("Applied column type casting")
 
 # -----------------------------------
-# ✅ Validate required fields
+# Validate required fields
 # Drop rows missing essential fields
 # -----------------------------------
 valid_df = df.filter(
@@ -146,7 +146,7 @@ else:
     log("No rejected records found.")
 
 # -----------------------------------
-# 🔗 Enforce referential integrity
+# Enforce referential integrity
 # Keep only order_items linked to known order_id from Orders Delta
 # -----------------------------------
 orders_df = spark.read.format("delta").load(ORDERS_TABLE_PATH).select("order_id").dropDuplicates()
@@ -154,7 +154,7 @@ valid_df = valid_df.join(orders_df, on="order_id", how="inner")
 log(f"Enforced referential integrity, joined with Orders table")
 
 # -----------------------------------
-# 🔁 Deduplication + Add ingestion timestamp
+# Deduplication + Add ingestion timestamp
 # Drop duplicates on composite key
 # -----------------------------------
 deduped_df = valid_df.dropDuplicates([
@@ -163,7 +163,7 @@ deduped_df = valid_df.dropDuplicates([
 log(f"Deduplicated data, final row count: {deduped_df.count()}")
 
 # -----------------------------------
-# 💾 Delta Lake Write (Merge or Overwrite)
+# Delta Lake Write (Merge or Overwrite)
 # Enhancements:
 # 1. Delta check before writing
 # 2. Merge/upsert if exists

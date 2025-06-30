@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 """
 AWS Glue ETL Job: products_job.py
@@ -41,13 +40,19 @@ spark.sparkContext.setLogLevel("ERROR")
 # -------------------------------------------
 # Parse job arguments
 # -------------------------------------------
+# args = getResolvedOptions(sys.argv, [
+#     'JOB_NAME', 'bucket_name', 'database_name', 'table_name'
+# ])
+# JOB_NAME = args['JOB_NAME']
+# BUCKET = args['bucket_name']
+# DATABASE = args['database_name']
+# TABLE_NAME = args['table_name']
 args = getResolvedOptions(sys.argv, [
-    'JOB_NAME', 'bucket_name', 'database_name', 'table_name'
+    'JOB_NAME', 'bucket_name'
 ])
 JOB_NAME = args['JOB_NAME']
 BUCKET = args['bucket_name']
-DATABASE = args['database_name']
-TABLE_NAME = args['table_name']
+
 
 # -------------------------------------------
 # Paths
@@ -110,9 +115,9 @@ def archive_original_files():
                 # Perform copy and delete (emulates move)
                 s3.copy_object(Bucket=BUCKET, CopySource={'Bucket': BUCKET, 'Key': s3_key}, Key=archive_key)
                 s3.delete_object(Bucket=BUCKET, Key=s3_key)
-                log(f"✅ Archived {s3_key} to {archive_key}")
+                log(f"Archived {s3_key} to {archive_key}")
     except Exception as e:
-        log(f"❌ Failed to archive files from {raw_prefix}: {e}")
+        log(f"Failed to archive files from {raw_prefix}: {e}")
 
 # -------------------------------------------
 # Schema
