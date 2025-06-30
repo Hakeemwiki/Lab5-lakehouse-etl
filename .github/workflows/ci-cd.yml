@@ -57,10 +57,10 @@ jobs:
         # Step 3: Upload Glue job scripts to S3
         - name: Upload Glue job scripts to S3
           run: |
-            aws s3 cp xlsx_to_csv_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv_job.py
-            aws s3 cp products_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_job.py
-            aws s3 cp orders_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/orders_job.py
-            aws s3 cp order_items_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_job.py
+            aws s3 cp xlsx_to_csv.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py
+            aws s3 cp products_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py
+            aws s3 cp order_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py
+            aws s3 cp order_items_glue_job.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py
             aws s3 cp utils.py s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py
 
         # Step 4: Create or update Glue jobs
@@ -68,15 +68,15 @@ jobs:
           run: |
             # Create or update xlsx_to_csv Glue job
             aws glue create-job --name xlsx_to_csv --role arn:aws:iam::396468676537:role/GlueJobRole \
-              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv_job.py" \
+              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py" \
               --default-arguments '{"--extra-py-files":"s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py"}' \
               --glue-version "4.0" --worker-type G.1X --number-of-workers 2 \
               || aws glue update-job --job-name xlsx_to_csv \
-              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv_job.py},DefaultArguments={--extra-py-files=s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py},GlueVersion=4.0,WorkerType=G.1X,NumberOfWorkers=2"
+              --job-update "Role=arn:aws:iam::396468676537:role/GlueJobRole,Command={Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/xlsx_to_csv.py},DefaultArguments={--extra-py-files=s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py},GlueVersion=4.0,WorkerType=G.1X,NumberOfWorkers=2"
 
             # Create or update products_glue_job
             aws glue create-job --name products_glue_job --role arn:aws:iam::396468676537:role/GlueJobRole \
-              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_job.py" \
+              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/products_glue_job.py" \
               --default-arguments '{"--extra-py-files":"s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py"}' \
               --glue-version "4.0" --worker-type G.1X --number-of-workers 2 \
               || aws glue update-job --job-name products_glue_job \
@@ -84,7 +84,7 @@ jobs:
 
             # Create or update order_glue_job
             aws glue create-job --name order_glue_job --role arn:aws:iam::396468676537:role/GlueJobRole \
-              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/orders_job.py" \
+              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_glue_job.py" \
               --default-arguments '{"--extra-py-files":"s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py"}' \
               --glue-version "4.0" --worker-type G.1X --number-of-workers 2 \
               || aws glue update-job --job-name order_glue_job \
@@ -92,7 +92,7 @@ jobs:
 
             # Create or update order_items_glue_job
             aws glue create-job --name order_items_glue_job --role arn:aws:iam::396468676537:role/GlueJobRole \
-              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_job.py" \
+              --command "Name=glueetl,ScriptLocation=s3://aws-glue-assets-396468676537-eu-north-1/scripts/order_items_glue_job.py" \
               --default-arguments '{"--extra-py-files":"s3://aws-glue-assets-396468676537-eu-north-1/scripts/utils.py"}' \
               --glue-version "4.0" --worker-type G.1X --number-of-workers 2 \
               || aws glue update-job --job-name order_items_glue_job \
