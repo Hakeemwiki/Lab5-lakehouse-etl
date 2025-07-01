@@ -73,6 +73,7 @@ Lab5-lakehouse-etl/
    - Automates testing and deployment on the `main` branch.
 
 ## 📋 Data Sources
+![alt text](docs/ER_diagram.svg)
 ### Product Data
 - **Fields**: `product_id`, `department_id`, `department`, `product_name`
 - **Validation**: No null `product_id` or `product_name`; referential integrity with `order_items.product_id`.
