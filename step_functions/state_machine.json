@@ -1,170 +1,398 @@
 {
-    "Comment": "Lakehouse ETL Pipeline Orchestration",
-    "StartAt": "RunXlsxToCsv",
-    "States": {
-      "RunXlsxToCsv": {
-        "Type": "Task",
-        "Resource": "arn:aws:states:::glue:startJobRun.sync",
-        "Parameters": {
-          "JobName": "xlsx_to_csv"
+  "Comment": "Lakehouse File Ingestion Step Function with Athena Queries and SNS Notifications",
+  "StartAt": "Count Files",
+  "States": {
+    "Count Files": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-north-1:396468676537:function:CountFiles",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "FileCountChoice"
+    },
+    "FileCountChoice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.countResult.has_products",
+          "BooleanEquals": true,
+          "Next": "Run Products Job"
         },
-        "Next": "ParallelProcessing",
-        "Catch": [
-          {
-            "ErrorEquals": [
-              "States.ALL"
-            ],
-            "Next": "NotifyFailure"
-          }
-        ]
-      },
-      "ParallelProcessing": {
-        "Type": "Parallel",
-        "Branches": [
-          {
-            "StartAt": "RunProductsJob",
-            "States": {
-              "RunProductsJob": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::glue:startJobRun.sync",
-                "Parameters": {
-                  "JobName": "products_glue_job"
-                },
-                "End": true
-              }
-            }
-          },
-          {
-            "StartAt": "RunOrdersJob",
-            "States": {
-              "RunOrdersJob": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::glue:startJobRun.sync",
-                "Parameters": {
-                  "JobName": "order_glue_job"
-                },
-                "End": true
-              }
-            }
-          },
-          {
-            "StartAt": "RunOrderItemsJob",
-            "States": {
-              "RunOrderItemsJob": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::glue:startJobRun.sync",
-                "Parameters": {
-                  "JobName": "order_items_glue_job"
-                },
-                "End": true
-              }
-            }
-          }
-        ],
-        "Next": "RunCrawlers",
-        "Catch": [
-          {
-            "ErrorEquals": [
-              "States.ALL"
-            ],
-            "Next": "NotifyFailure"
-          }
-        ]
-      },
-      "RunCrawlers": {
-        "Type": "Parallel",
-        "Branches": [
-          {
-            "StartAt": "RunProductsCrawler",
-            "States": {
-              "RunProductsCrawler": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
-                "Parameters": {
-                  "Name": "products_crawler"
-                },
-                "End": true
-              }
-            }
-          },
-          {
-            "StartAt": "RunOrdersCrawler",
-            "States": {
-              "RunOrdersCrawler": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
-                "Parameters": {
-                  "Name": "order_crawler"
-                },
-                "End": true
-              }
-            }
-          },
-          {
-            "StartAt": "RunOrderItemsCrawler",
-            "States": {
-              "RunOrderItemsCrawler": {
-                "Type": "Task",
-                "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
-                "Parameters": {
-                  "Name": "order_items_crawler"
-                },
-                "End": true
-              }
-            }
-          }
-        ],
-        "Next": "AthenaQueryPreview",
-        "Catch": [
-          {
-            "ErrorEquals": [
-              "States.ALL"
-            ],
-            "Next": "NotifyFailure"
-          }
-        ]
-      },
-      "AthenaQueryPreview": {
-        "Type": "Task",
-        "Resource": "arn:aws:states:::aws-sdk:athena:startQueryExecution",
-        "Parameters": {
-          "QueryString": "SELECT * FROM \"lakehouse_dwh\".\"order_items\" LIMIT 10;",
-          "QueryExecutionContext": {
-            "Database": "lakehouse-dwh"
-          },
-          "ResultConfiguration": {
-            "OutputLocation": "s3://ecommerce-lakehouse-001/athena-queries/"
-          }
+        {
+          "Variable": "$.countResult.has_orders",
+          "BooleanEquals": true,
+          "Next": "Run Orders Job"
         },
-        "Next": "NotifySuccess",
-        "Catch": [
-          {
-            "ErrorEquals": [
-              "States.ALL"
-            ],
-            "Next": "NotifyFailure"
-          }
-        ]
+        {
+          "Variable": "$.countResult.has_order_items",
+          "BooleanEquals": true,
+          "Next": "Run Order Items Job"
+        }
+      ],
+      "Default": "Notify No Files Found"
+    },
+    "Run Products Job": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "products_glue_job"
       },
-      "NotifySuccess": {
-        "Type": "Task",
-        "Resource": "arn:aws:states:::sns:publish",
-        "Parameters": {
-          "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
-          "Message": "Lakehouse pipeline execution completed successfully.",
-          "Subject": "Lakehouse Pipeline Success"
-        },
-        "End": true
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify Job Failed"
+        }
+      ],
+      "Next": "Run Products Crawler"
+    },
+    "Run Products Crawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-north-1:396468676537:function:StartGlueCrawler",
+      "Parameters": {
+        "crawler_name": "products_crawler"
       },
-      "NotifyFailure": {
-        "Type": "Task",
-        "Resource": "arn:aws:states:::sns:publish",
-        "Parameters": {
-          "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
-          "Message": "Lakehouse pipeline failed. Check Step Function logs for details.",
-          "Subject": "Lakehouse Pipeline Failed"
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Wait Before Checking Products Crawler"
+    },
+    "Wait Before Checking Products Crawler": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "Check Products Crawler Status"
+    },
+    "Check Products Crawler Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Parameters": {
+        "Name": "products_crawler"
+      },
+      "ResultPath": "$.crawlerStatus",
+      "Next": "Products Crawler Status Choice"
+    },
+    "Products Crawler Status Choice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.crawlerStatus.Crawler.State",
+          "StringEquals": "RUNNING",
+          "Next": "Wait Before Checking Products Crawler"
+        }
+      ],
+      "Default": "Run Products Athena Query"
+    },
+    "Run Products Athena Query": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT * FROM products LIMIT 10",
+        "QueryExecutionContext": {
+          "Database": "lakehouse_dwh"
         },
-        "End": true
-      }
+        "ResultConfiguration": {
+          "OutputLocation": "s3://ecommerce-lakehouse-001/query-results/"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Success"
+    },
+    "Run Orders Job": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "orders_glue_job"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify Job Failed"
+        }
+      ],
+      "Next": "Run Orders Crawler"
+    },
+    "Run Orders Crawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-north-1:396468676537:function:StartGlueCrawler",
+      "Parameters": {
+        "crawler_name": "order_crawler"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Wait Before Checking Orders Crawler"
+    },
+    "Wait Before Checking Orders Crawler": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "Check Orders Crawler Status"
+    },
+    "Check Orders Crawler Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Parameters": {
+        "Name": "order_crawler"
+      },
+      "ResultPath": "$.crawlerStatus",
+      "Next": "Orders Crawler Status Choice"
+    },
+    "Orders Crawler Status Choice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.crawlerStatus.Crawler.State",
+          "StringEquals": "RUNNING",
+          "Next": "Wait Before Checking Orders Crawler"
+        }
+      ],
+      "Default": "Run Orders Athena Query"
+    },
+    "Run Orders Athena Query": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT * FROM orders LIMIT 10",
+        "QueryExecutionContext": {
+          "Database": "lakehouse_dwh"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "s3://ecommerce-lakehouse-001/query-results/"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Success"
+    },
+    "Run Order Items Job": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "order_items_glue_job"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Glue.JobRunFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify Job Failed"
+        }
+      ],
+      "Next": "Run Order Items Crawler"
+    },
+    "Run Order Items Crawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-north-1:396468676537:function:StartGlueCrawler",
+      "Parameters": {
+        "crawler_name": "order_items_crawler"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Wait Before Checking Order Items Crawler"
+    },
+    "Wait Before Checking Order Items Crawler": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "Check Order Items Crawler Status"
+    },
+    "Check Order Items Crawler Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Parameters": {
+        "Name": "order_items_crawler"
+      },
+      "ResultPath": "$.crawlerStatus",
+      "Next": "Order Items Crawler Status Choice"
+    },
+    "Order Items Crawler Status Choice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.crawlerStatus.Crawler.State",
+          "StringEquals": "RUNNING",
+          "Next": "Wait Before Checking Order Items Crawler"
+        }
+      ],
+      "Default": "Run Order Items Athena Query"
+    },
+    "Run Order Items Athena Query": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT * FROM order_items LIMIT 10",
+        "QueryExecutionContext": {
+          "Database": "lakehouse_dwh"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "s3://ecommerce-lakehouse-001/query-results/"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["Athena.QueryExecutionFailed"],
+          "ResultPath": "$.error",
+          "Next": "Notify No Files Found"
+        }
+      ],
+      "Next": "Success"
+    },
+    "Notify No Files Found": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
+        "Message": "Lakehouse Step Function failed: No known data files were detected in the S3 prefix or a task failed.",
+        "Subject": "Lakehouse Pipeline Failure Notification"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "Success"
+        }
+      ],
+      "Next": "Success"
+    },
+    "Notify Job Failed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:eu-north-1:396468676537:lakehouse-job-alerts",
+        "Message.$": "$.error.Error",
+        "Subject": "Lakehouse Pipeline Glue Job Failure"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "Success"
+        }
+      ],
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed"
     }
   }
+}
