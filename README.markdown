@@ -10,7 +10,7 @@ This repository implements a production-grade Lakehouse architecture for an e-co
 ### Problem Statement
 The e-commerce platform requires a robust data pipeline to ingest, clean, and transform raw transactional data (products, orders, and order items) stored in Amazon S3. The system must handle deduplication, schema validation, referential integrity, and partitioning while ensuring ACID compliance. Challenges include managing multi-sheet Excel files, orchestrating multiple ETL jobs, handling failures gracefully, and automating deployment with CI/CD. The solution must support downstream analytics via Athena and provide observability through detailed logging.
 
-### How We Tackled It
+### How I Tackled It
 - **Modular Design**: Centralized reusable functions (e.g., `archive_original_files`, `validate_schema`) in `utils.py` to avoid import issues and enhance maintainability.
 - **Schema Enforcement**: Defined and validated expected schemas for each dataset, rejecting rows with missing primary keys or invalid timestamps.
 - **Referential Integrity**: Ensured `order_id` and `product_id` relationships between tables using Delta Lake joins.
