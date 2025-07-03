@@ -184,13 +184,13 @@ else:
     log(f"{write_count} rows written to new Delta table with partitioning by 'date'.")
 
 # -----------------------------------
-# 🗃️ Archive original files after successful ingestion
+# Archive original files after successful ingestion
 # -----------------------------------
 archive_original_files()
 log("Original Excel files archived.")
 
 # -----------------------------------
-# 📄 Write ETL log to S3
+# Write ETL log to S3
 # -----------------------------------
 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Current time: 2025-06-28 22:15:00 GMT
 log_data = f"""
