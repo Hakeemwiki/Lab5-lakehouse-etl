@@ -72,7 +72,7 @@ Lab5-lakehouse-etl/
 7. **CI/CD with GitHub Actions**:
    - Automates testing and deployment on the `main` branch.
 
-## 📋 Data Sources
+## Data Sources
 ![alt text](docs/ER_diagram.svg)
 ### Product Data
 - **Fields**: `product_id`, `department_id`, `department`, `product_name`
@@ -86,7 +86,7 @@ Lab5-lakehouse-etl/
 - **Fields**: `id`, `order_id`, `user_id`, `days_since_prior_order`, `product_id`, `add_to_cart_order`, `reordered`, `order_timestamp`, `date`, `sheet_name`, `source_file`
 - **Validation**: No null `id`, `order_id`, `user_id`, `product_id`, or `order_timestamp`; referential integrity with `orders.order_id`.
 
-## 🛠️ Setup and Deployment
+## Setup and Deployment
 ### Prerequisites
 - AWS account with permissions for Glue, S3, Step Functions, Athena, and SNS.
 - Python 3.11 installed locally for testing.
@@ -121,7 +121,7 @@ Lab5-lakehouse-etl/
 8. **Run Pipeline**:
    - Trigger the Step Function manually or via S3 event notifications.
 
-## 🧪 Testing
+## Testing
 ### Unit Tests
 - Tests are located in `tests/` using Pytest.
 - Coverage includes schema validation and S3 mocking for `archive_original_files`.
@@ -174,7 +174,7 @@ s3://ecommerce-lakehouse-001/
 └── scripts/                # Glue job scripts
 ```
 
-## ✅ Best Practices
+## Best Practices
 ### Architecture
 - **Lakehouse Design**: Combines S3 scalability with Delta Lake reliability.
 - **Modularity**: `utils.py` centralizes reusable logic, reducing duplication.
@@ -198,7 +198,7 @@ s3://ecommerce-lakehouse-001/
 - **IAM Roles**: Restricts permissions to necessary actions.
 - **Encryption**: S3 data encrypted at rest (default AWS setting).
 
-## 🚧 Challenges and Solutions
+## Challenges and Solutions
 - **Import Issues**:
   - **Problem**: Glue job scripts in `jobs/` caused `ModuleNotFoundError` due to inconsistent paths.
   - **Solution**: Moved shared functions to `utils.py` in the root, imported by all jobs and tests.
