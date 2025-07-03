@@ -1,9 +1,24 @@
 
-![alt text](docs/lab5.drawio.svg)
-
 # Lakehouse Architecture for E-Commerce Transactions
 
 This repository implements a production-grade Lakehouse architecture for an e-commerce platform on AWS. It leverages Amazon S3 for storage, AWS Glue with Apache Spark and Delta Lake for ETL processing, AWS Step Functions for orchestration, AWS Glue Data Catalog for metadata management, Amazon Athena for querying, and GitHub Actions for CI/CD automation. The system ensures high data reliability, schema enforcement, and consistent data freshness for analytical workloads, addressing the business's core needs.
+
+## Architecture
+![alt text](docs/lab5.drawio.svg)
+
+# Flow
+- **Ingestion & Preprocessing:** Raw transactional data (CSV/XLSX files) is ingested into an S3 "raw" zone. An initial Glue job then converts any XLSX files to CSV format, placing them in a "preprocessed" S3 zone.
+
+- **Parallel ETL Processing:** AWS Step Functions orchestrates the next steps. It triggers parallel AWS Glue jobs for products, orders, and order items. These jobs clean, validate (e.g., schema enforcement, referential integrity), deduplicate, and upsert the data into ACID-compliant Delta Lake tables stored in an S3 "warehouse/lakehouse-dwh" zone.
+
+- **Metadata Management:** After the ETL jobs complete, AWS Glue Crawlers are triggered in parallel to scan the newly updated Delta tables. These crawlers automatically update the AWS Glue Data Catalog, ensuring the latest schemas are available.
+
+- **Data Validation & Analytics:** An Athena query is then executed to validate the presence and accessibility of the data in the Delta tables via the Glue Data Catalog.
+
+- **Orchestration & Monitoring:** AWS Step Functions orchestrates this entire workflow, handling conditional logic (e.g., based on new file detection using Lambda), retries, and error handling. It sends SNS notifications upon pipeline success or failure.
+
+- **Automation & CI/CD:** The entire process, including the deployment and testing of Glue jobs and the Step Function, is automated using GitHub Actions. Original files are also archived after successful ingestion.
+
 
 ## Project Overview
 
